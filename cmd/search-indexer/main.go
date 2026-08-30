@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"library-app-search-indexer/internal/domain"
+	"library-app-search-indexer/internal/kafka"
 	"log"
 
 	"library-app-search-indexer/internal/config"
@@ -36,6 +37,22 @@ func main() {
 	}
 
 	fmt.Println("Chapters index created successfully")
+
+	consumer, err := kafka.NewConsumer(
+		cfg.KafkaBrokers,
+		cfg.KafkaTopic,
+		client,
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println("Kafka consumer started...")
+
+	err = consumer.Start()
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	chapter := domain.Chapter{
 		ChapterUUID:     "665b8998-b2a4-463b-babc-d2d064b406e2",
