@@ -1,4 +1,4 @@
-package kafka
+package events
 
 type ChapterCreatedEvent struct {
 	Metadata EventMetadata           `json:"metadata"`

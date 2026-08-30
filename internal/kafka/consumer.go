@@ -8,6 +8,8 @@ import (
 	es "github.com/elastic/go-elasticsearch/v9"
 
 	"library-app-search-indexer/internal/elasticsearch"
+	"library-app-search-indexer/internal/events"
+	"library-app-search-indexer/internal/mapper"
 )
 
 type Consumer struct {
@@ -50,7 +52,7 @@ func (c *Consumer) Start() error {
 		switch e := event.(type) {
 
 		case *kafka.Message:
-			var event ChapterCreatedEvent
+			var event events.ChapterCreatedEvent
 
 			err := json.Unmarshal(e.Value, &event)
 			if err != nil {
@@ -62,7 +64,9 @@ func (c *Consumer) Start() error {
 			fmt.Printf("Chapter: %s\n", event.Data.Title)
 			fmt.Printf("Chapter UUID: %s\n", event.Data.ChapterUUID)
 
-			err = elasticsearch.IndexChapter(c.searchClient, event.Data)
+			chapter := mapper.ToChapter(event.Data)
+
+			err = elasticsearch.IndexChapter(c.searchClient, chapter)
 			if err != nil {
 				fmt.Printf("Failed to index chapter: %v\n", err)
 				continue
