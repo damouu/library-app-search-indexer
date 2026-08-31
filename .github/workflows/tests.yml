@@ -24,9 +24,17 @@ jobs:
       - name: Download dependencies
         run: go mod download
 
-      - name: Run Tests
+      - name: Run Unit Tests
         id: run_tests
         run: go test ./...
+
+      - name: Run Tests with Race Detector
+        id: run_race_tests
+        run: go test -race ./...
+
+      - name: Run Go Vet
+        id: go_vet
+        run: go vet ./...
 
       - name: Generate coverage report
         run: go test ./... -coverprofile=coverage.out
@@ -53,7 +61,19 @@ jobs:
           update_existing: true
           search_existing: open
 
-      - name: pull-request
+      - name: Move YouTrack issue to TestFailed
+        if: ${{ failure() }}
+        uses: bloobirds-it/action-youtrack-move@v1.0.0
+        with:
+          github-token: ${{ secrets.MyWorkflow }}
+          yt-url: ${{ secrets.YOUTRACK_URL }}
+          yt-token: ${{ secrets.YOUTRACK_TOKEN }}
+          yt-project-id: "SD"
+          yt-column-triggers: "Test"
+          yt-column-target: "TestFailed"
+
+
+      - name: Create Pull Request
         if: ${{ success() }}
         uses: repo-sync/pull-request@v2
         env:
@@ -65,14 +85,3 @@ jobs:
           pr_body: ${{ github.event.head_commit.message }}
           pr_label: "Staging,TestsPassed"
           pr_assignee: "damouu"
-
-      - name: move youtrack-test-failed
-        if: ${{ failure() }}
-        uses: bloobirds-it/action-youtrack-move@v1.0.0
-        with:
-          github-token: ${{ secrets.MyWorkflow }}
-          yt-url: ${{ secrets.YOUTRACK_URL }}
-          yt-token: ${{ secrets.YOUTRACK_TOKEN }}
-          yt-project-id: "SD"
-          yt-column-triggers: "Test"
-          yt-column-target: "TestFailed"
