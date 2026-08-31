@@ -3,7 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
-	"library-app-search-indexer/internal/domain"
+	"library-app-search-indexer/internal/application"
+	"library-app-search-indexer/internal/kafka"
 	"log"
 
 	"library-app-search-indexer/internal/config"
@@ -37,25 +38,19 @@ func main() {
 
 	fmt.Println("Chapters index created successfully")
 
-	chapter := domain.Chapter{
-		ChapterUUID:     "665b8998-b2a4-463b-babc-d2d064b406e2",
-		SeriesUUID:      "115b2f71-ac9c-45e8-8f95-ffff651ce9df",
-		Title:           "ハンター×ハンター",
-		SecondTitle:     "",
-		Summary:         "Jolyne Cujoh is accused of a crime she did not commit and is sent to prison.",
-		ChapterNumber:   19,
-		TotalPages:      192,
-		PublicationDate: "2000-02-12",
-		CoverArtworkURL: "https://m.media-amazon.com/images/I/613rH6YiBZL._SL1200_.jpg",
-	}
+	chapterRepository := elasticsearch.NewChapterRepository(client)
 
-	err = elasticsearch.IndexChapter(client, chapter)
+	chapterIndexer := application.NewChapterIndexer(chapterRepository)
+
+	consumer, err := kafka.NewConsumer(cfg.KafkaBrokers, cfg.KafkaTopic, chapterIndexer)
+
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	fmt.Println("Chapter indexed successfully")
+	fmt.Println("Kafka consumer started...")
 
-	fmt.Println("test")
-
+	if err := consumer.Start(); err != nil {
+		log.Fatal(err)
+	}
 }
