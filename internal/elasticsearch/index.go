@@ -3,7 +3,6 @@ package elasticsearch
 import (
 	"context"
 	"fmt"
-	"library-app-search-indexer/internal/domain"
 
 	es "github.com/elastic/go-elasticsearch/v9"
 	"github.com/elastic/go-elasticsearch/v9/typedapi/esdsl"
@@ -32,27 +31,11 @@ func CreateChaptersIndex(client *es.TypedClient) error {
 		AddProperty("publication_date", esdsl.NewDateProperty()).
 		AddProperty("cover_artwork_url", esdsl.NewKeywordProperty())
 
-	_, err = client.Indices.Create(chaptersIndex).
-		Mappings(mappings).
-		Do(context.Background())
+	_, err = client.Indices.Create(chaptersIndex).Mappings(mappings).Do(context.Background())
 
 	if err != nil {
 		return fmt.Errorf("failed to create chapters index: %w", err)
 	}
 
 	return nil
-}
-
-func IndexChapter(client *es.TypedClient, chapter domain.Chapter) error {
-	_, err := client.Index(chaptersIndex).
-		Id(chapter.ChapterUUID).
-		Document(chapter).
-		Do(context.Background())
-
-	if err != nil {
-		return fmt.Errorf("failed to index chapter %s: %w", chapter.ChapterUUID, err)
-	}
-
-	return nil
-
 }
