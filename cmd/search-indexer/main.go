@@ -66,13 +66,13 @@ func main() {
 		CoverArtworkURL: "https://m.media-amazon.com/images/I/613rH6YiBZL._SL1200_.jpg",
 	}
 
-	err = elasticsearch.IndexChapter(client, chapter)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	fmt.Println("Chapter indexed successfully")
+	fmt.Println("Kafka consumer started...")
 
-	fmt.Println("test")
-
+	if err := consumer.Start(); err != nil {
+		log.Fatal(err)
+	}
 }
