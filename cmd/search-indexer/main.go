@@ -73,4 +73,6 @@ func main() {
 
 	fmt.Println("Chapter indexed successfully")
 
+	fmt.Println("test")
+
 }
