@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"library-app-search-indexer/internal/application"
+	"library-app-search-indexer/internal/domain"
 	"library-app-search-indexer/internal/kafka"
 	"log"
 
@@ -38,11 +38,33 @@ func main() {
 
 	fmt.Println("Chapters index created successfully")
 
-	chapterRepository := elasticsearch.NewChapterRepository(client)
+	consumer, err := kafka.NewConsumer(
+		cfg.KafkaBrokers,
+		cfg.KafkaTopic,
+		client,
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	chapterIndexer := application.NewChapterIndexer(chapterRepository)
+	fmt.Println("Kafka consumer started...")
 
-	consumer, err := kafka.NewConsumer(cfg.KafkaBrokers, cfg.KafkaTopic, chapterIndexer)
+	err = consumer.Start()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	chapter := domain.Chapter{
+		ChapterUUID:     "665b8998-b2a4-463b-babc-d2d064b406e2",
+		SeriesUUID:      "115b2f71-ac9c-45e8-8f95-ffff651ce9df",
+		Title:           "ハンター×ハンター",
+		SecondTitle:     "",
+		Summary:         "Jolyne Cujoh is accused of a crime she did not commit and is sent to prison.",
+		ChapterNumber:   19,
+		TotalPages:      192,
+		PublicationDate: "2000-02-12",
+		CoverArtworkURL: "https://m.media-amazon.com/images/I/613rH6YiBZL._SL1200_.jpg",
+	}
 
 	if err != nil {
 		log.Fatal(err)
