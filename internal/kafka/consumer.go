@@ -3,26 +3,19 @@ package kafka
 import (
 	"encoding/json"
 	"fmt"
-
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
-	es "github.com/elastic/go-elasticsearch/v9"
+	"library-app-search-indexer/internal/application"
 
-	"library-app-search-indexer/internal/elasticsearch"
 	"library-app-search-indexer/internal/events"
-	"library-app-search-indexer/internal/mapper"
 )
 
 type Consumer struct {
-	client       *kafka.Consumer
-	topic        string
-	searchClient *es.TypedClient
+	client         *kafka.Consumer
+	topic          string
+	chapterIndexer *application.ChapterIndexer
 }
 
-func NewConsumer(
-	brokers string,
-	topic string,
-	searchClient *es.TypedClient,
-) (*Consumer, error) {
+func NewConsumer(brokers string, topic string, chapterIndexer *application.ChapterIndexer) (*Consumer, error) {
 	client, err := kafka.NewConsumer(&kafka.ConfigMap{
 		"bootstrap.servers": brokers,
 		"group.id":          "library-search-indexer",
@@ -34,9 +27,9 @@ func NewConsumer(
 	}
 
 	return &Consumer{
-		client:       client,
-		topic:        topic,
-		searchClient: searchClient,
+		client:         client,
+		topic:          topic,
+		chapterIndexer: chapterIndexer,
 	}, nil
 }
 
@@ -64,9 +57,8 @@ func (c *Consumer) Start() error {
 			fmt.Printf("Chapter: %s\n", event.Data.Title)
 			fmt.Printf("Chapter UUID: %s\n", event.Data.ChapterUUID)
 
-			chapter := mapper.ToChapter(event.Data)
+			err = c.chapterIndexer.Handle(event)
 
-			err = elasticsearch.IndexChapter(c.searchClient, chapter)
 			if err != nil {
 				fmt.Printf("Failed to index chapter: %v\n", err)
 				continue
