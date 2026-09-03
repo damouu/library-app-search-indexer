@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	es "github.com/elastic/go-elasticsearch/v9"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 	"library-app-search-indexer/internal/domain"
 )
 
@@ -15,10 +17,24 @@ func NewChapterRepository(client *es.TypedClient) *ChapterRepository {
 	return &ChapterRepository{client: client}
 }
 
-func (r *ChapterRepository) Index(chapter domain.Chapter) error {
-	_, err := r.client.Index(chaptersIndex).Id(chapter.ChapterUUID).Document(chapter).Do(context.Background())
+func (r *ChapterRepository) Index(ctx context.Context, chapter domain.Chapter) error {
+	tracer := otel.Tracer("library-app-search-indexer")
+
+	ctx, span := tracer.Start(
+		ctx,
+		"elasticsearch.index",
+		trace.WithSpanKind(trace.SpanKindClient),
+	)
+	defer span.End()
+
+	_, err := r.client.Index(chaptersIndex).
+		Id(chapter.ChapterUUID).
+		Document(chapter).
+		Do(ctx)
+
 	if err != nil {
-		return fmt.Errorf("error while indexing chapter: %w", err)
+		return fmt.Errorf("failed to index chapter %s: %w", chapter.ChapterUUID, err)
 	}
+
 	return nil
 }
