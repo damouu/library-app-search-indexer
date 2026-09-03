@@ -54,8 +54,11 @@ func New(cfg config.Config) (*App, error) {
 		Addr: ":8081",
 	}
 
+	healthChecker := elasticsearch.NewHealthChecker(client)
+	healthHandler := health.NewHandler(healthChecker)
+
 	http.HandleFunc("/health/live", health.LiveHandler)
-	http.HandleFunc("/health/ready", health.ReadyHandler)
+	http.HandleFunc("/health/ready", healthHandler.ReadyHandler)
 
 	return &App{
 		consumer: consumer,
