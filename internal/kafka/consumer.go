@@ -4,13 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"go.opentelemetry.io/otel"
 
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"library-app-search-indexer/internal/events"
 )
 
 type EventHandler interface {
-	Handle(event events.ChapterCreatedEvent) error
+	Handle(ctx context.Context, event events.ChapterCreatedEvent) error
 }
 
 type Consumer struct {
@@ -36,6 +37,69 @@ func NewConsumer(brokers string, topic string, handler EventHandler) (*Consumer,
 	}, nil
 }
 
+type kafkaHeaderCarrier struct {
+	headers []kafka.Header
+}
+
+func (c kafkaHeaderCarrier) Get(key string) string {
+	for _, header := range c.headers {
+		if header.Key == key {
+			return string(header.Value)
+		}
+	}
+
+	return ""
+}
+
+func (c kafkaHeaderCarrier) Set(key string, value string) {
+}
+
+func (c kafkaHeaderCarrier) Keys() []string {
+	keys := make([]string, 0, len(c.headers))
+
+	for _, header := range c.headers {
+		keys = append(keys, header.Key)
+	}
+
+	return keys
+}
+
+func (c *Consumer) handleMessage(ctx context.Context, message *kafka.Message) {
+	carrier := kafkaHeaderCarrier{
+		headers: message.Headers,
+	}
+
+	parentCtx := otel.GetTextMapPropagator().Extract(
+		ctx,
+		carrier,
+	)
+
+	tracer := otel.Tracer("library-app-search-indexer")
+
+	_, span := tracer.Start(parentCtx, "kafka.consume")
+	defer span.End()
+
+	var event events.ChapterCreatedEvent
+
+	err := json.Unmarshal(message.Value, &event)
+	if err != nil {
+		fmt.Printf("Failed to deserialize message: %v\n", err)
+		return
+	}
+
+	fmt.Printf("Event received: %s\n", event.Metadata.EventType)
+	fmt.Printf("Chapter: %s\n", event.Data.Title)
+	fmt.Printf("Chapter UUID: %s\n", event.Data.ChapterUUID)
+
+	err = c.handler.Handle(parentCtx, event)
+	if err != nil {
+		fmt.Printf("Failed to index chapter: %v\n", err)
+		return
+	}
+
+	fmt.Println("Chapter indexed successfully")
+}
+
 func (c *Consumer) Start(ctx context.Context) error {
 	defer c.client.Close()
 
@@ -55,25 +119,7 @@ func (c *Consumer) Start(ctx context.Context) error {
 
 			switch e := event.(type) {
 			case *kafka.Message:
-				var event events.ChapterCreatedEvent
-
-				err := json.Unmarshal(e.Value, &event)
-				if err != nil {
-					fmt.Printf("Failed to deserialize message: %v\n", err)
-					continue
-				}
-
-				fmt.Printf("Event received: %s\n", event.Metadata.EventType)
-				fmt.Printf("Chapter: %s\n", event.Data.Title)
-				fmt.Printf("Chapter UUID: %s\n", event.Data.ChapterUUID)
-
-				err = c.handler.Handle(event)
-				if err != nil {
-					fmt.Printf("Failed to index chapter: %v\n", err)
-					continue
-				}
-
-				fmt.Println("Chapter indexed successfully")
+				c.handleMessage(ctx, e)
 
 			case kafka.Error:
 				fmt.Printf("Kafka error: %v\n", e)
