@@ -3,13 +3,14 @@ package application
 import (
 	"context"
 	"fmt"
-	"library-app-search-indexer/internal/health"
-	"net/http"
-	"time"
-
+	"go.opentelemetry.io/otel"
 	"library-app-search-indexer/internal/config"
 	"library-app-search-indexer/internal/elasticsearch"
+	"library-app-search-indexer/internal/health"
 	"library-app-search-indexer/internal/kafka"
+	"library-app-search-indexer/internal/tracing"
+	"net/http"
+	"time"
 )
 
 type App struct {
@@ -18,6 +19,12 @@ type App struct {
 }
 
 func New(cfg config.Config) (*App, error) {
+	tp, err := tracing.Init2(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize tracing: %w", err)
+	}
+
+	_ = tp
 	client, err := elasticsearch.NewClient(cfg.ElasticsearchURL)
 	if err != nil {
 		return nil, err
@@ -54,8 +61,11 @@ func New(cfg config.Config) (*App, error) {
 		Addr: ":8081",
 	}
 
+	healthChecker := elasticsearch.NewHealthChecker(client)
+	healthHandler := health.NewHandler(healthChecker)
+
 	http.HandleFunc("/health/live", health.LiveHandler)
-	http.HandleFunc("/health/ready", health.ReadyHandler)
+	http.HandleFunc("/health/ready", healthHandler.ReadyHandler)
 
 	return &App{
 		consumer: consumer,
@@ -64,6 +74,10 @@ func New(cfg config.Config) (*App, error) {
 }
 
 func (a *App) Run(ctx context.Context) error {
+	tracer := otel.Tracer("search-indexer")
+	_, span := tracer.Start(ctx, "search-indexer.startup")
+	span.End()
+
 	fmt.Println("Kafka consumer started...")
 
 	go func() {
