@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"library-app-search-indexer/internal/events"
@@ -26,6 +28,7 @@ func NewConsumer(brokers string, topic string, handler EventHandler) (*Consumer,
 		"group.id":          "library-search-indexer",
 		"auto.offset.reset": "earliest",
 	})
+
 	if err != nil {
 		return nil, err
 	}
@@ -65,23 +68,29 @@ func (c kafkaHeaderCarrier) Keys() []string {
 }
 
 func (c *Consumer) handleMessage(ctx context.Context, message *kafka.Message) {
-	carrier := kafkaHeaderCarrier{
-		headers: message.Headers,
-	}
 
-	parentCtx := otel.GetTextMapPropagator().Extract(
-		ctx,
-		carrier,
-	)
+	carrier := kafkaHeaderCarrier{headers: message.Headers}
+
+	parentCtx := otel.GetTextMapPropagator().Extract(ctx, carrier)
 
 	tracer := otel.Tracer("library-app-search-indexer")
 
-	_, span := tracer.Start(parentCtx, "kafka.consume")
+	spanCtx, span := tracer.Start(parentCtx, "kafka.consume", trace.WithSpanKind(trace.SpanKindConsumer),
+		trace.WithAttributes(
+			attribute.String("messaging.system", "kafka"),
+			attribute.String("messaging.destination.name", c.topic),
+			attribute.String("messaging.consumer.group.name", "library-search-indexer"),
+			attribute.Int64("messaging.kafka.partition", int64(message.TopicPartition.Partition)),
+			attribute.Int64("messaging.kafka.offset", int64(message.TopicPartition.Offset)),
+		),
+	)
+
 	defer span.End()
 
 	var event events.ChapterCreatedEvent
 
 	err := json.Unmarshal(message.Value, &event)
+
 	if err != nil {
 		fmt.Printf("Failed to deserialize message: %v\n", err)
 		return
@@ -91,7 +100,8 @@ func (c *Consumer) handleMessage(ctx context.Context, message *kafka.Message) {
 	fmt.Printf("Chapter: %s\n", event.Data.Title)
 	fmt.Printf("Chapter UUID: %s\n", event.Data.ChapterUUID)
 
-	err = c.handler.Handle(parentCtx, event)
+	err = c.handler.Handle(spanCtx, event)
+
 	if err != nil {
 		fmt.Printf("Failed to index chapter: %v\n", err)
 		return
