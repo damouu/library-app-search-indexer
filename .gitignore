@@ -3,3 +3,4 @@
 .env.example
 .dockerignore
 coverage.out
+codecov.yml
