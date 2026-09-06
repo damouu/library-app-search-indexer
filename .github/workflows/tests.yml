@@ -37,10 +37,7 @@ jobs:
         run: go vet ./...
 
       - name: Generate coverage report
-        run: go test ./... -coverprofile=coverage.out
-
-      - name: Display coverage
-        run: go tool cover -func=coverage.out
+        run: ./scripts/coverage.sh
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
@@ -71,7 +68,6 @@ jobs:
           yt-project-id: "SD"
           yt-column-triggers: "Test"
           yt-column-target: "TestFailed"
-
 
       - name: Create Pull Request
         if: ${{ success() }}
