@@ -35,7 +35,10 @@ func CreateChaptersIndex(client *es.TypedClient) error {
 				"title_index_analyzer": types.CustomAnalyzer{
 					Type:      "custom",
 					Tokenizer: "kuromoji_tokenizer",
-					Filter:    []string{"title_edge_ngram"},
+					Filter: []string{
+						"lowercase",
+						"title_edge_ngram",
+					},
 				},
 			},
 		},
