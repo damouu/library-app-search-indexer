@@ -48,18 +48,12 @@ func New(cfg config.Config) (*App, error) {
 	chapterRepository := elasticsearch.NewChapterRepository(client)
 	chapterIndexer := NewChapterIndexer(chapterRepository)
 
-	consumer, err := kafka.NewConsumer(
-		cfg.KafkaBrokers,
-		cfg.KafkaTopic,
-		chapterIndexer,
-	)
+	consumer, err := kafka.NewConsumer(cfg.KafkaBrokers, cfg.KafkaTopic, chapterIndexer)
 	if err != nil {
 		return nil, err
 	}
 
-	server := &http.Server{
-		Addr: ":8081",
-	}
+	server := &http.Server{Addr: ":8081"}
 
 	healthChecker := elasticsearch.NewHealthChecker(client)
 	healthHandler := health.NewHandler(healthChecker)
