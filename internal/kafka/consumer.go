@@ -4,31 +4,39 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+
+	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"library-app-search-indexer/internal/events"
+)
+
+const (
+	consumerGroup = "library-search-indexer"
+	pollTimeoutMs = 1000
+	tracerName    = "search-indexer"
 )
 
 type EventHandler interface {
 	Handle(ctx context.Context, event events.ChapterCreatedEvent) error
 }
 
+// Consumer consumes chapter creation events from Kafka.
 type Consumer struct {
 	client  *kafka.Consumer
 	topic   string
 	handler EventHandler
 }
 
+// NewConsumer creates a Kafka consumer configured for the search indexer.
 func NewConsumer(brokers string, topic string, handler EventHandler) (*Consumer, error) {
 	client, err := kafka.NewConsumer(&kafka.ConfigMap{
 		"bootstrap.servers": brokers,
-		"group.id":          "library-search-indexer",
+		"group.id":          consumerGroup,
 		"auto.offset.reset": "earliest",
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -67,21 +75,32 @@ func (c kafkaHeaderCarrier) Keys() []string {
 	return keys
 }
 
+// handleMessage deserializes and processes a single Kafka message.
 func (c *Consumer) handleMessage(ctx context.Context, message *kafka.Message) {
-
-	carrier := kafkaHeaderCarrier{headers: message.Headers}
+	carrier := kafkaHeaderCarrier{
+		headers: message.Headers,
+	}
 
 	parentCtx := otel.GetTextMapPropagator().Extract(ctx, carrier)
 
-	tracer := otel.Tracer("library-app-search-indexer")
+	tracer := otel.Tracer(tracerName)
 
-	spanCtx, span := tracer.Start(parentCtx, "kafka.consume", trace.WithSpanKind(trace.SpanKindConsumer),
+	spanCtx, span := tracer.Start(
+		parentCtx,
+		"kafka.consume",
+		trace.WithSpanKind(trace.SpanKindConsumer),
 		trace.WithAttributes(
 			attribute.String("messaging.system", "kafka"),
 			attribute.String("messaging.destination.name", c.topic),
-			attribute.String("messaging.consumer.group.name", "library-search-indexer"),
-			attribute.Int64("messaging.kafka.partition", int64(message.TopicPartition.Partition)),
-			attribute.Int64("messaging.kafka.offset", int64(message.TopicPartition.Offset)),
+			attribute.String("messaging.consumer.group.name", consumerGroup),
+			attribute.Int64(
+				"messaging.kafka.partition",
+				int64(message.TopicPartition.Partition),
+			),
+			attribute.Int64(
+				"messaging.kafka.offset",
+				int64(message.TopicPartition.Offset),
+			),
 		),
 	)
 
@@ -89,9 +108,7 @@ func (c *Consumer) handleMessage(ctx context.Context, message *kafka.Message) {
 
 	var event events.ChapterCreatedEvent
 
-	err := json.Unmarshal(message.Value, &event)
-
-	if err != nil {
+	if err := json.Unmarshal(message.Value, &event); err != nil {
 		fmt.Printf("Failed to deserialize message: %v\n", err)
 		return
 	}
@@ -100,9 +117,7 @@ func (c *Consumer) handleMessage(ctx context.Context, message *kafka.Message) {
 	fmt.Printf("Chapter: %s\n", event.Data.Title)
 	fmt.Printf("Chapter UUID: %s\n", event.Data.ChapterUUID)
 
-	err = c.handler.Handle(spanCtx, event)
-
-	if err != nil {
+	if err := c.handler.Handle(spanCtx, event); err != nil {
 		fmt.Printf("Failed to index chapter: %v\n", err)
 		return
 	}
@@ -110,11 +125,12 @@ func (c *Consumer) handleMessage(ctx context.Context, message *kafka.Message) {
 	fmt.Println("Chapter indexed successfully")
 }
 
+// Start subscribes to the configured Kafka topic and processes messages
+// until the context is cancelled.
 func (c *Consumer) Start(ctx context.Context) error {
 	defer c.client.Close()
 
-	err := c.client.SubscribeTopics([]string{c.topic}, nil)
-	if err != nil {
+	if err := c.client.SubscribeTopics([]string{c.topic}, nil); err != nil {
 		return err
 	}
 
@@ -125,7 +141,7 @@ func (c *Consumer) Start(ctx context.Context) error {
 			return nil
 
 		default:
-			event := c.client.Poll(1000)
+			event := c.client.Poll(pollTimeoutMs)
 
 			switch e := event.(type) {
 			case *kafka.Message:

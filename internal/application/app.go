@@ -3,70 +3,29 @@ package application
 import (
 	"context"
 	"fmt"
-	"go.opentelemetry.io/otel"
-	"library-app-search-indexer/internal/config"
-	"library-app-search-indexer/internal/elasticsearch"
-	"library-app-search-indexer/internal/health"
-	"library-app-search-indexer/internal/kafka"
-	"library-app-search-indexer/internal/tracing"
 	"net/http"
 	"time"
+
+	"go.opentelemetry.io/otel"
+
+	"library-app-search-indexer/internal/kafka"
 )
 
+// App coordinates the runtime lifecycle of the search indexer.
 type App struct {
 	consumer *kafka.Consumer
 	server   *http.Server
 }
 
-func New(cfg config.Config) (*App, error) {
-	tp, err := tracing.Init2(context.Background())
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize tracing: %w", err)
-	}
-
-	_ = tp
-	client, err := elasticsearch.NewClient(cfg.ElasticsearchURL)
-	if err != nil {
-		return nil, err
-	}
-
-	fmt.Println("Elasticsearch client created:", client != nil)
-
-	_, err = client.Info().Do(context.Background())
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to Elasticsearch: %w", err)
-	}
-
-	fmt.Println("Elasticsearch connected")
-
-	if err := elasticsearch.CreateChaptersIndex(client); err != nil {
-		return nil, err
-	}
-
-	fmt.Println("Chapters index created successfully")
-
-	chapterRepository := elasticsearch.NewChapterRepository(client)
-	chapterIndexer := NewChapterIndexer(chapterRepository)
-
-	consumer, err := kafka.NewConsumer(cfg.KafkaBrokers, cfg.KafkaTopic, chapterIndexer)
-	if err != nil {
-		return nil, err
-	}
-
-	server := &http.Server{Addr: ":8081"}
-
-	healthChecker := elasticsearch.NewHealthChecker(client)
-	healthHandler := health.NewHandler(healthChecker)
-
-	http.HandleFunc("/health/live", health.LiveHandler)
-	http.HandleFunc("/health/ready", healthHandler.ReadyHandler)
-
+// NewApp creates an application from its runtime dependencies.
+func NewApp(consumer *kafka.Consumer, server *http.Server) *App {
 	return &App{
 		consumer: consumer,
 		server:   server,
-	}, nil
+	}
 }
 
+// Run starts the HTTP server and Kafka consumer until the context is cancelled.
 func (a *App) Run(ctx context.Context) error {
 	tracer := otel.Tracer("search-indexer")
 	_, span := tracer.Start(ctx, "search-indexer.startup")
@@ -75,7 +34,8 @@ func (a *App) Run(ctx context.Context) error {
 	fmt.Println("Kafka consumer started...")
 
 	go func() {
-		if err := a.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := a.server.ListenAndServe(); err != nil &&
+			err != http.ErrServerClosed {
 			fmt.Printf("HTTP server error: %v\n", err)
 		}
 	}()
@@ -85,10 +45,7 @@ func (a *App) Run(ctx context.Context) error {
 
 		fmt.Println("Shutting down HTTP server...")
 
-		shutdownCtx, cancel := context.WithTimeout(
-			context.Background(),
-			5*time.Second,
-		)
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
 		if err := a.server.Shutdown(shutdownCtx); err != nil {
