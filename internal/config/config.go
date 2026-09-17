@@ -1,10 +1,12 @@
 package config
 
 import (
-	"github.com/joho/godotenv"
 	"os"
+
+	"github.com/joho/godotenv"
 )
 
+// Config contains the configuration required by the search indexer.
 type Config struct {
 	KafkaBrokers        string
 	KafkaTopic          string
@@ -12,6 +14,7 @@ type Config struct {
 	ElasticsearchAPIKey string
 }
 
+// Load loads configuration values from environment variables.
 func Load() Config {
 	_ = godotenv.Load()
 
