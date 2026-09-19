@@ -26,8 +26,8 @@ func New(cfg config.Config) (*application.App, error) {
 		cfg.OpenSearchURL,
 		cfg.OpenSearchUsername,
 		cfg.OpenSearchPassword,
-		cfg.OpenSearchCAPath,
 	)
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to create OpenSearch client: %w", err)
 	}
