@@ -14,18 +14,19 @@ const chaptersIndex = "chapters"
 func CreateChaptersIndex(client *opensearchapi.Client) error {
 	ctx := context.Background()
 
-	exists, err := client.Indices.Exists(
+	resp, err := client.Indices.Exists(
 		ctx,
 		opensearchapi.IndicesExistsReq{
 			Indices: []string{chaptersIndex},
 		},
 	)
-	if err != nil {
-		return fmt.Errorf("failed to check if chapters index exists: %w", err)
+
+	if resp.StatusCode == http.StatusOK {
+		return nil
 	}
 
-	if exists.StatusCode == http.StatusOK {
-		return nil
+	if err != nil && resp.StatusCode != http.StatusNotFound {
+		return fmt.Errorf("failed to check if chapters index exists: %w", err)
 	}
 
 	_, err = client.Indices.Create(
