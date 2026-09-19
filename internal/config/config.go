@@ -10,6 +10,9 @@ import (
 type Config struct {
 	KafkaBrokers        string
 	KafkaTopic          string
+	KafkaUsername       string
+	KafkaPassword       string
+	KafkaCAPath         string
 	ElasticsearchURL    string
 	ElasticsearchAPIKey string
 }
@@ -21,6 +24,9 @@ func Load() Config {
 	return Config{
 		KafkaBrokers:        os.Getenv("KAFKA_BROKERS"),
 		KafkaTopic:          os.Getenv("KAFKA_TOPIC"),
+		KafkaUsername:       os.Getenv("KAFKA_USERNAME"),
+		KafkaPassword:       os.Getenv("KAFKA_PASSWORD"),
+		KafkaCAPath:         os.Getenv("KAFKA_CA_PATH"),
 		ElasticsearchURL:    os.Getenv("ELASTICSEARCH_URL"),
 		ElasticsearchAPIKey: os.Getenv("ELASTICSEARCH_API_KEY"),
 	}
