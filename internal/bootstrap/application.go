@@ -7,9 +7,9 @@ import (
 
 	"library-app-search-indexer/internal/application"
 	"library-app-search-indexer/internal/config"
-	"library-app-search-indexer/internal/elasticsearch"
 	"library-app-search-indexer/internal/health"
 	"library-app-search-indexer/internal/kafka"
+	"library-app-search-indexer/internal/opensearch"
 	"library-app-search-indexer/internal/tracing"
 )
 
@@ -22,30 +22,40 @@ func New(cfg config.Config) (*application.App, error) {
 		return nil, fmt.Errorf("failed to initialize tracing: %w", err)
 	}
 
-	client, err := elasticsearch.NewClient(cfg.ElasticsearchURL)
+	client, err := opensearch.NewClient(
+		cfg.OpenSearchURL,
+		cfg.OpenSearchUsername,
+		cfg.OpenSearchPassword,
+		cfg.OpenSearchCAPath,
+	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create Elasticsearch client: %w", err)
+		return nil, fmt.Errorf("failed to create OpenSearch client: %w", err)
 	}
 
-	_, err = client.Info().Do(context.Background())
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to Elasticsearch: %w", err)
+	if _, err := client.Info(context.Background(), nil); err != nil {
+		return nil, fmt.Errorf("failed to connect to OpenSearch: %w", err)
 	}
 
-	if err := elasticsearch.CreateChaptersIndex(client); err != nil {
+	if err := opensearch.CreateChaptersIndex(client); err != nil {
 		return nil, fmt.Errorf("failed to create chapters index: %w", err)
 	}
 
-	chapterRepository := elasticsearch.NewChapterRepository(client)
+	chapterRepository := opensearch.NewChapterRepository(client)
 	chapterIndexer := application.NewChapterIndexer(chapterRepository)
 
-	consumer, err := kafka.NewConsumer(cfg.KafkaBrokers, cfg.KafkaTopic, cfg.KafkaUsername, cfg.KafkaPassword, cfg.KafkaCAPath, chapterIndexer)
-
+	consumer, err := kafka.NewConsumer(
+		cfg.KafkaBrokers,
+		cfg.KafkaTopic,
+		cfg.KafkaUsername,
+		cfg.KafkaPassword,
+		cfg.KafkaCAPath,
+		chapterIndexer,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Kafka consumer: %w", err)
 	}
 
-	healthChecker := elasticsearch.NewHealthChecker(client)
+	healthChecker := opensearch.NewHealthChecker(client)
 	healthHandler := health.NewHandler(healthChecker)
 
 	mux := http.NewServeMux()
