@@ -16,7 +16,6 @@ type Config struct {
 	OpenSearchURL      string
 	OpenSearchUsername string
 	OpenSearchPassword string
-	OpenSearchCAPath   string
 }
 
 // Load loads configuration values from environment variables.
@@ -32,6 +31,5 @@ func Load() Config {
 		OpenSearchURL:      os.Getenv("OPENSEARCH_URL"),
 		OpenSearchUsername: os.Getenv("OPENSEARCH_USERNAME"),
 		OpenSearchPassword: os.Getenv("OPENSEARCH_PASSWORD"),
-		OpenSearchCAPath:   os.Getenv("OPENSEARCH_CA_PATH"),
 	}
 }
