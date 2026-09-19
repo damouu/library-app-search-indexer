@@ -31,11 +31,17 @@ type Consumer struct {
 }
 
 // NewConsumer creates a Kafka consumer configured for the search indexer.
-func NewConsumer(brokers string, topic string, handler EventHandler) (*Consumer, error) {
+func NewConsumer(brokers string, topic string, username string, password string, caPath string, handler EventHandler) (*Consumer, error) {
 	client, err := kafka.NewConsumer(&kafka.ConfigMap{
 		"bootstrap.servers": brokers,
 		"group.id":          consumerGroup,
 		"auto.offset.reset": "earliest",
+
+		"security.protocol": "SASL_SSL",
+		"sasl.mechanisms":   "SCRAM-SHA-256",
+		"sasl.username":     username,
+		"sasl.password":     password,
+		"ssl.ca.location":   caPath,
 	})
 	if err != nil {
 		return nil, err
