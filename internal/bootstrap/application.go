@@ -39,7 +39,7 @@ func New(cfg config.Config) (*application.App, error) {
 	chapterRepository := elasticsearch.NewChapterRepository(client)
 	chapterIndexer := application.NewChapterIndexer(chapterRepository)
 
-	consumer, err := kafka.NewConsumer(cfg.KafkaBrokers, cfg.KafkaTopic, chapterIndexer)
+	consumer, err := kafka.NewConsumer(cfg.KafkaBrokers, cfg.KafkaTopic, cfg.KafkaUsername, cfg.KafkaPassword, cfg.KafkaCAPath, chapterIndexer)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Kafka consumer: %w", err)
