@@ -45,7 +45,7 @@ func (a *App) Run(ctx context.Context) error {
 
 		fmt.Println("Shutting down HTTP server...")
 
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		shutdownCtx, cancel := context.WithTimeout(context.Background(),5*time.Second,)
 		defer cancel()
 
 		if err := a.server.Shutdown(shutdownCtx); err != nil {
